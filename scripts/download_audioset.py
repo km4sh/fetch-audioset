@@ -22,7 +22,7 @@ def download_video(ytid, dest, name):
         "format": "bestaudio/best",
         "quiet": True,
         "abort-on-unavailable-fragment": True,
-        "cookiefile": "/Users/er1yaaruma/Downloads/youtube.com_cookies.txt",
+        "cookiefile": "./youtube.com_cookies.txt",
     }
     with youtube_dl.YoutubeDL(ydl_opt) as ydl:
         info = ydl.extract_info(ytid, download=True)
@@ -196,8 +196,8 @@ def download_tsv(meta, save_dir, padded_dir=None, sleep_time=0.1):
 
 if __name__ == "__main__":
     tsv_file = "/Volumes/Blue500a/AudioSet/audioset_eval_strong.tsv"
-    save_dir = "/Volumes/Blue500a/AudioSet/strong_label_eval"
-    padded_dir = "/Volumes/Blue500a/AudioSet/strong_label_eval_padded"
+    save_dir = "/Volumes/Blue500a/AudioSet/wavs/strong_label_eval"
+    padded_dir = "/Volumes/Blue500a/AudioSet/wavs/strong_label_eval_padded"
 
     os.makedirs(padded_dir, exist_ok=True)
 
