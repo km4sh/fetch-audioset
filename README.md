@@ -10,4 +10,4 @@
 - `padding_zeros()` 如上一步的說明，如果有一些樣本不足十秒，則補零到十秒。這一步可以根據自己的需求選用。
 - `checking()` 檢查當前文件是否符合要求，主要檢查通道數、採樣率、採樣深度、採樣時間、總樣點數。也是利用sox來獲取的文檔信息，確保準確可讀。
 
-對於下載當中由於網絡等原因出現下載失敗的情況，我們可以用`[clean.py](https://github.com/km4sh/fetch-audioset/blob/development/scripts/clean.py)`來清理一下臨時文件，以及不符合我們設定格式的文件。
+對於下載當中由於網絡等原因出現下載失敗的情況，我們可以用[`clean.py`](https://github.com/km4sh/fetch-audioset/blob/development/scripts/clean.py)來清理一下臨時文件，以及不符合我們設定格式的文件。
