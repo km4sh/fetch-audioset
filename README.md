@@ -1,5 +1,11 @@
 # fetch-audioset
 
+所有代碼都在github.com/km4sh/fetch-audioset這個repo中。
+
+- scripts文件夾當中包含了下載用的py文件，也有生成下載報告和清理臨時文件的腳本；
+- tsv文件夾包含了Google放出的AudioSet(Strong Label)數據集的tsv文件（一種以Tab作爲分隔符的文件）；
+- info文件夾當中
+
 完整的Blog在這裏：[Notion](https://er1yaaruma.notion.site/AudioSet-550ee3f0765340369568b221dcc2e733)
 
 下載AudioSet主要用的是下載神器`youtube-dl`來實現的。可以[點擊這裏](https://github.com/km4sh/fetch-audioset/blob/development/scripts/download_audioset.py)直達。由於接口原因，貌似沒有可以直接下載音頻的方式，所以需要先下載視頻，再提取音頻。所以主要流程如下：
