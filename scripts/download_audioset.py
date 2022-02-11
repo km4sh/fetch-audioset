@@ -1,7 +1,8 @@
 import os
 from random import sample
 from numpy.lib.npyio import save
-import youtube_dl
+from torch import isin
+import yt_dlp as youtube_dl
 import logging
 from time import sleep
 import soundfile as sf
@@ -36,8 +37,8 @@ def download_video(ytid, dest, name):
 
 
 def split_samplename(item):
-    ytid = item[:11]
-    start = item[12:]
+    ytid = item[0]
+    start = item[1]
     return ytid, start
 
 
@@ -47,7 +48,7 @@ def convert_to_audio(
     num_channels=1,
     sampelrate=44100,
     silent=True,
-    clear_origin=True,
+    clear_origin=False,
 ):
     logging.info(" > convert_to_audio")
     output_pre, _ = os.path.splitext(filename)
@@ -160,51 +161,76 @@ def padding_zeros(filename, padded_dir, samplerate=44100, duration=10):
 
 def download_sample(item, save_dir, padded_dir):
     ytid, start = split_samplename(item)
-    video_file, ytid_duration = download_video(ytid, save_dir, item)
+    video_file, ytid_duration = download_video(ytid, save_dir, item[0])
     audio_file, converted_duration = convert_to_audio(video_file)
     sample_file = trim_audio(audio_file, start)
     sample_file = padding_zeros(sample_file, padded_dir)
     sample_file = checking(sample_file, padded_dir, ytid_duration, converted_duration)
+    new_audio_path = os.path.join(os.path.dirname(sample_file), "audio/AudioSet." + os.path.basename(sample_file))
+    new_video_path = os.path.join(os.path.dirname(video_file), "video/AudioSet." + os.path.basename(video_file))
+    os.system(f"mv '{sample_file}' '{new_audio_path}'")
+    os.system(f"mv '{video_file}' '{new_video_path}'")
     logging.info(f"Finished: \t{item}")
 
 
 def download_tsv(meta, save_dir, padded_dir=None, sleep_time=0.1):
     if not padded_dir:
-        logging.info("Not setting path to save padded files, using the same as save_dir.")
+        logging.info(
+            "Not setting path to save padded files, using the same as save_dir."
+        )
         padded_dir = save_dir
 
     while len(meta):
         item = meta.pop(0)
-        logging.info("{:=^72s}".format(item))
-        if os.path.exists(os.path.join(save_dir, f"{item}.wav")):
-            logging.warning(f"Skipping: \t{item}")
+        logging.info("{:=^72s}".format(item[0]))
+        if os.path.exists(os.path.join(save_dir, f"{item[0]}.wav")):
+            logging.warning(f"Skipping: \t{item[0]}")
             continue
-        if os.path.exists(os.path.join(padded_dir, f"{item}.wav")):
-            logging.warning(f"Skipping: \t{item}")
+        if os.path.exists(os.path.join(padded_dir, f"{item[0]}.wav")):
+            logging.warning(f"Skipping: \t{item[0]}")
             continue
         try:
             download_sample(item, save_dir=save_dir, padded_dir=padded_dir)
         except Exception as e:
-            sleep(1)
-            info = os.popen(f"rm -vf -- {save_dir}/{item[:11]}*").read()
+            sleep(0.3)
+            info = os.popen(f"rm -vf -- {save_dir}/{item[0]}*").read()
             info = info.replace("\n", " ")
             logging.warning(f"Temp files removed: {info}")
             logging.error(f"{e}")
             logging.info(f"Left: \t{len(meta)}")
-        sleep(sleep_time)
+        # sleep(sleep_time)
 
 
 if __name__ == "__main__":
-    tsv_file = "/Volumes/Blue500a/AudioSet/audioset_eval_strong.tsv"
-    save_dir = "/Volumes/Blue500a/AudioSet/wavs/strong_label_eval"
-    padded_dir = "/Volumes/Blue500a/AudioSet/wavs/strong_label_eval_padded"
+    meta_file = (
+        "/server20/datasets/AudioSet/fetch-audioset/tsv/unbalanced_train_segments.csv"
+    )
+    save_dir = "/server20/datasets/AudioSet/fetch-audioset/audiosetdata/original"
+    padded_dir = "/server20/datasets/AudioSet/fetch-audioset/audiosetdata/padded"
 
+    save_dir = os.path.join(
+        save_dir, os.path.basename(meta_file).replace(".tsv", "").replace(".csv", "")
+    )
+    padded_dir = os.path.join(
+        padded_dir, os.path.basename(meta_file).replace(".tsv", "").replace(".csv", "")
+    )
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(save_dir + "/audio", exist_ok=True)
+    os.makedirs(save_dir + "/video", exist_ok=True)
     os.makedirs(padded_dir, exist_ok=True)
 
-    with open(tsv_file) as f:
+    with open(meta_file) as f:
         meta = f.readlines()[1:]
-        meta = [line.strip().split("\t")[0] for line in meta]
-        meta = list(set(meta))
+        if meta_file.endswith(".tsv"):
+            meta = [(line.strip().split("\t")[0]) for line in meta]
+            meta = list(set(meta))
+        elif meta_file.endswith(".csv"):
+            while meta[0][0] == "#":
+                meta.pop(0)
+            meta = [
+                (line.strip().split(", ")[0], int(float(line.strip().split(", ")[1])))
+                for line in meta
+            ]
 
     print("AudioSet Script by km4sh")
 
@@ -220,11 +246,11 @@ if __name__ == "__main__":
 
     logging.info(f"Downloading meta length: {len(meta)}")
 
-    sleep(3)
+    sleep(1)
 
     from multiprocessing import Pool
 
-    num_proc = 8
+    num_proc = 64
     star_input = [
         (
             meta[i * len(meta) // num_proc : (i + 1) * len(meta) // num_proc],
@@ -235,8 +261,7 @@ if __name__ == "__main__":
     ]
     with Pool(num_proc) as p:
         p.starmap(
-            download_tsv,
-            star_input,
+            download_tsv, star_input,
         )
         p.close()
         p.join()
