@@ -1,13 +1,10 @@
 import os
-from random import sample
-from numpy.lib.npyio import save
-from torch import isin
 import yt_dlp as youtube_dl
 import logging
 from time import sleep
 import soundfile as sf
 import numpy as np
-from multiprocessing import active_children
+
 
 logging.basicConfig(
     format=f"%(asctime)s @{os.getpid()} %(levelname)-8s %(message)s",
@@ -17,11 +14,12 @@ logging.basicConfig(
 
 
 def download_video(ytid, dest, name):
-    logging.info(" > download_video")
+    # logging.info(" > download_video")
     ydl_opt = {
         "outtmpl": f"{dest}/{name}.%(ext)s",
         "format": "bestaudio/best",
         "quiet": True,
+        "noprogress": True,
         "abort-on-unavailable-fragment": True,
         "cookiefile": "./youtube.com_cookies.txt",
     }
@@ -29,10 +27,10 @@ def download_video(ytid, dest, name):
         info = ydl.extract_info(ytid, download=True)
         filename = ydl.prepare_filename(info)
 
-    logging.info(f"Downloaded: \t{os.path.basename(filename)}")
+    # logging.info(f" {ytid} Downloaded: \t{os.path.basename(filename)}")
     check_duration = info["duration"]
 
-    logging.info(f"Duration: \tconverted audio: {check_duration}s")
+    # logging.info(f" {ytid} Duration: \tconverted audio: {check_duration}s")
     return filename, check_duration
 
 
@@ -50,7 +48,7 @@ def convert_to_audio(
     silent=True,
     clear_origin=False,
 ):
-    logging.info(" > convert_to_audio")
+    # logging.info(" > convert_to_audio")
     output_pre, _ = os.path.splitext(filename)
     output_file = output_pre + "_temp.wav"
 
@@ -63,26 +61,26 @@ def convert_to_audio(
         ffmpeg_command += " 2> /dev/null"
     os.system(ffmpeg_command)
 
-    logging.info(
-        f"Converted: \t{os.path.basename(filename)} to {os.path.basename(output_file)}"
-    )
+    # logging.info(
+        # f"Converted: \t{os.path.basename(filename)} to {os.path.basename(output_file)}"
+    # )
 
     if clear_origin:
         os.system(f"rm -rf {filename}")
-        logging.warning(f"Removed: \t{os.path.basename(filename)}")
+        # logging.warning(f"Removed: \t{os.path.basename(filename)}")
 
     command = f"sox --i -- {output_file}"
     info = os.popen(cmd=command).read()
 
     check_duration = info.strip().split("\n")[4][16:].strip().split(" = ")
     check_duration = round(int(check_duration[1].strip().split(" ")[0]) / sampelrate)
-    logging.info(f"Duration: \tconverted audio: {check_duration}s")
+    # logging.info(f"Duration: \tconverted audio: {check_duration}s")
 
     return output_file, check_duration
 
 
 def trim_audio(filename, start, silent=True):
-    logging.info(" > trim_audio")
+    # logging.info(" > trim_audio")
     seek_head = int(start) // 1000
     start_time = f"{seek_head // 3600}:{(seek_head % 3600) // 60}:{seek_head % 60}"
     output_file = filename.replace("_temp", "")
@@ -91,38 +89,38 @@ def trim_audio(filename, start, silent=True):
     if silent:
         sox_command += " 2> /dev/null"
     os.system(sox_command)
-    logging.info(
-        f"Trimmed: \t{os.path.basename(filename)} to {os.path.basename(output_file)}"
-    )
+    # logging.info(
+        # f"Trimmed: \t{os.path.basename(filename)} to {os.path.basename(output_file)}"
+    # )
 
     os.system(f"rm -rf {filename}")
-    logging.warning(f"Removed: \t{os.path.basename(filename)}")
+    # logging.warning(f"Removed: \t{os.path.basename(filename)}")
 
     return output_file
 
 
 def checking(filename, padded_dir, meta_duration, audio_duration):
-    logging.info(" > checking")
-    logging.info(f"Checking: \t{filename}")
+    # logging.info(" > checking")
+    # logging.info(f"Checking: \t{filename}")
     command = f"sox --i -- {filename}"
     info = os.popen(cmd=command).read()
     check_channel = int(info.strip().split("\n")[1].split(":")[1].strip())
-    logging.info(f"Checking: \tchannels:\t{check_channel}")
+    # logging.info(f"Checking: \tchannels:\t{check_channel}")
     assert (
         check_channel == 1
     ), f"Wrong ch numbers, got {check_channel}, but should be 1 (mono)."
     check_samplerate = int(info.strip().split("\n")[2].split(":")[1].strip())
-    logging.info(f"Checking: \tsamplerate:\t{check_samplerate}")
+    # logging.info(f"Checking: \tsamplerate:\t{check_samplerate}")
     assert (
         check_samplerate == 44100
     ), f"Wrong samplerate, got{check_samplerate}, but should be 44100."
     check_precision = info.strip().split("\n")[3].split(":")[1].strip()
-    logging.info(f"Checking: \tprecision:\t{check_precision}")
+    # logging.info(f"Checking: \tprecision:\t{check_precision}")
     assert (
         check_precision == "16-bit"
     ), f"Wrong precision, got{check_precision}, but should be 16-bit."
     check_duration = info.strip().split("\n")[4][16:].strip().split(" = ")
-    logging.info(f"Checking: \tduration:\t{check_duration[0]}")
+    # logging.info(f"Checking: \tduration:\t{check_duration[0]}")
     assert (
         check_duration[0] == "00:00:10.00"
     ), f"Wrong duration, got {check_duration[0]}, but should be 00:00:10.00."
@@ -133,8 +131,8 @@ def checking(filename, padded_dir, meta_duration, audio_duration):
     if meta_duration != audio_duration and abs(meta_duration - audio_duration) < 2:
         output_file = os.path.join(padded_dir, os.path.basename(filename))
         os.system(f"mv {filename} {output_file}")
-        logging.warning(f"Different duration: {meta_duration} and {audio_duration}.")
-        logging.warning(f"Moved to: \t{output_file}")
+        # logging.warning(f"Different duration: {meta_duration} and {audio_duration}.")
+        # logging.warning(f"Moved to: \t{output_file}")
     elif meta_duration != audio_duration:
         raise AssertionError
     else:
@@ -148,11 +146,9 @@ def padding_zeros(filename, padded_dir, samplerate=44100, duration=10):
     if diff == 0:
         return filename
     else:
-        logging.warning(" > padding")
-        logging.warning(f"Diff: {diff}")
         info = os.popen(f"rm -fv {filename}").read().strip()
-        logging.warning(f"Removed: \t{info}")
         waveform = np.concatenate((waveform, np.zeros(diff)), axis=0)
+        logging.warning(f" > padding {filename} Diff: {diff} Removed: \t{info}")
         filename = os.path.join(padded_dir, os.path.basename(filename))
         with open(filename, "wb") as f:
             sf.write(f, waveform, samplerate)
@@ -170,24 +166,24 @@ def download_sample(item, save_dir, padded_dir):
     new_video_path = os.path.join(os.path.dirname(video_file), "video/AudioSet." + os.path.basename(video_file))
     os.system(f"mv '{sample_file}' '{new_audio_path}'")
     os.system(f"mv '{video_file}' '{new_video_path}'")
-    logging.info(f"Finished: \t{item}")
+    logging.info(f"Finished: \t{item[0]}")
 
 
 def download_tsv(meta, save_dir, padded_dir=None, sleep_time=0.1):
     if not padded_dir:
-        logging.info(
-            "Not setting path to save padded files, using the same as save_dir."
-        )
+        # logging.info(
+            # "Not setting path to save padded files, using the same as save_dir."
+        # )
         padded_dir = save_dir
 
     while len(meta):
         item = meta.pop(0)
-        logging.info("{:=^72s}".format(item[0]))
+        # logging.info("{:=^72s}".format(item[0]))
         if os.path.exists(os.path.join(save_dir, f"{item[0]}.wav")):
-            logging.warning(f"Skipping: \t{item[0]}")
+            # logging.warning(f"Skipping: \t{item[0]}")
             continue
         if os.path.exists(os.path.join(padded_dir, f"{item[0]}.wav")):
-            logging.warning(f"Skipping: \t{item[0]}")
+            # logging.warning(f"Skipping: \t{item[0]}")
             continue
         try:
             download_sample(item, save_dir=save_dir, padded_dir=padded_dir)
@@ -195,9 +191,9 @@ def download_tsv(meta, save_dir, padded_dir=None, sleep_time=0.1):
             sleep(0.3)
             info = os.popen(f"rm -vf -- {save_dir}/{item[0]}*").read()
             info = info.replace("\n", " ")
-            logging.warning(f"Temp files removed: {info}")
-            logging.error(f"{e}")
-            logging.info(f"Left: \t{len(meta)}")
+            # logging.warning(f"Temp files removed: {info}")
+            # logging.error(f"{e}")
+            # logging.info(f"Left: \t{len(meta)}")
         # sleep(sleep_time)
 
 
@@ -237,15 +233,13 @@ if __name__ == "__main__":
     temp = meta
     meta = []
     for item in temp:
-        if os.path.exists(os.path.join(save_dir, f"{item}.wav")):
+        if os.path.exists(os.path.join(save_dir, "audio", f"AudioSet.{item[0]}.wav")):
             print(f"Skipping: \t{item}", end="\r")
-        elif os.path.exists(os.path.join(padded_dir, f"{item}.wav")):
+        elif os.path.exists(os.path.join(padded_dir, f"{item[0]}.wav")):
             print(f"Skipping: \t{item}", end="\r")
         else:
             meta.append(item)
-
     logging.info(f"Downloading meta length: {len(meta)}")
-
     sleep(1)
 
     from multiprocessing import Pool
@@ -265,4 +259,4 @@ if __name__ == "__main__":
         )
         p.close()
         p.join()
-    logging.info("ALL FINISHED.")
+    # logging.info("ALL FINISHED.")
