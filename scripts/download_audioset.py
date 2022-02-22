@@ -1,5 +1,6 @@
 from multiprocessing.sharedctypes import Value
 import os
+from more_itertools import padded
 import yt_dlp as youtube_dl
 from yt_dlp import DownloadError
 from yt_dlp.utils import ExtractorError
@@ -86,8 +87,9 @@ def convert_to_audio(
     )
 
     if clear_origin:
-        os.system(f"rm -rf {filename}")
-        logging.warning(f"Removed: \t{os.path.basename(filename)}")
+        if len(filename) >= 11:
+            os.system(f"rm -rf {filename}")
+            logging.warning(f"Removed: \t{os.path.basename(filename)}")
 
     command = f"sox --i -- {output_file}"
     info = os.popen(cmd=command).read()
@@ -112,9 +114,9 @@ def trim_audio(filename, start, silent=True):
     logging.debug(
         f"Trimmed: \t{os.path.basename(filename)} to {os.path.basename(output_file)}"
     )
-
-    os.system(f"rm -rf {filename}")
-    logging.warning(f"Removed: \t{os.path.basename(filename)}")
+    if len(filename) >= 11:
+        os.system(f"rm -rf {filename}")
+        logging.warning(f"Removed: \t{os.path.basename(filename)}")
 
     return output_file
 
@@ -148,15 +150,13 @@ def checking(filename, padded_dir, meta_duration, audio_duration):
         check_duration[1] == "441000 samples"
     ), f"Wrong duration, got {check_duration[1]}, but should be 441000 samples."
 
-    if meta_duration != audio_duration and abs(meta_duration - audio_duration) < 2:
-        output_file = os.path.join(padded_dir, os.path.basename(filename))
-        os.system(f"mv {filename} {output_file}")
-        logging.debug(f"Different duration: {meta_duration} and {audio_duration}.")
-        logging.debug(f"Moved to: \t{output_file}")
-    elif meta_duration != audio_duration:
-        raise AssertionError
-    else:
-        output_file = filename
+    # if meta_duration != audio_duration and abs(meta_duration - audio_duration) < 2:
+    #     output_file = os.path.join(padded_dir, os.path.basename(filename))
+    #     os.system(f"mv {filename} {output_file}")
+    #     logging.debug(f"Different duration: {meta_duration} and {audio_duration}.")
+    #     logging.debug(f"Moved to: \t{output_file}")
+    # else:
+    output_file = filename
     return output_file
 
 
@@ -166,12 +166,14 @@ def padding_zeros(filename, padded_dir, samplerate=44100, duration=10):
     if diff == 0:
         return filename
     else:
-        info = os.popen(f"rm -fv {filename}").read().strip()
+        if len(filename) >= 11:
+            info = os.popen(f"rm -fv {filename}").read().strip()
         waveform = np.concatenate((waveform, np.zeros(diff)), axis=0)
         logging.warning(f" > padding {filename} Diff: {diff} Removed: \t{info}")
         filename = os.path.join(padded_dir, os.path.basename(filename))
         with open(filename, "wb") as f:
             sf.write(f, waveform, samplerate)
+        print(filename)
         return filename
 
 
@@ -189,11 +191,11 @@ def download_sample(item, save_dir, padded_dir, count):
         os.system(f"mv '{video_file}' '{new_video_path}'")
         logging.info(f"Finished: \t{item[0]}")
         count[0] += 1
-        print(f"OK: {count[0]:6d} | NG: {count[1]:6d} | ALL: {count[2]} ({int(((count[0] + count[1]) * 100) / count[2]):-3d}%)", end="\r")
+        print(f"OK: {count[0]:6d} | NG: {count[1]:6d} | LEFT: {count[2] - count[0] - count[1]} ({int(((count[0] + count[1]) * 100) / count[2]):-3d}%)", end="\r")
     else:
         logging.info(f"Downloading {ytid} NG. Ometting...")
         count[1] += 1
-        print(f"OK: {count[0]:6d} | NG: {count[1]:6d} | ALL: {count[2]} ({int(((count[0] + count[1]) * 100) / count[2]):-3d}%) with {ytid_duration[:80]}", end="\n")
+        print(f"OK: {count[0]:6d} | NG: {count[1]:6d} | LEFT: {count[2] - count[0] - count[1]} ({int(((count[0] + count[1]) * 100) / count[2]):-3d}%) with {ytid_duration[:80]}", end="\n")
         with open("missing_videos.txt", "a") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             f.write(f"{ytid}\n")
@@ -209,19 +211,14 @@ def download_tsv(meta, save_dir, padded_dir, count, sleep_time=0.1):
     while len(meta):
         item = meta.pop(0)
         logging.info("{:=^72s}".format(item[0]))
-        if os.path.exists(os.path.join(save_dir, f"{item[0]}.wav")):
-            logging.warning(f"Skipping: \t{item[0]}")
-            continue
-        if os.path.exists(os.path.join(padded_dir, f"{item[0]}.wav")):
-            logging.warning(f"Skipping: \t{item[0]}")
-            continue
         try:
             download_sample(item, save_dir=save_dir, padded_dir=padded_dir, count=count)
         except Exception as e:
             sleep(0.3)
-            info = os.popen(f"rm -vf -- {save_dir}/{item[0]}*").read()
-            info = info.replace("\n", " ")
-            logging.warning(f"Temp files removed: {info}")
+            if len(item[0]) == 11:
+                info = os.popen(f"rm -vf -- {save_dir}/{item[0]}*").read()
+                info = info.replace("\n", " ")
+                logging.warning(f"Temp files removed: {info}")
             # logging.error(f"{e}")
             logging.info(f"Left: \t{len(meta)}")
         # sleep(sleep_time)
@@ -273,14 +270,22 @@ if __name__ == "__main__":
     print(f"Remove missing videos' id, left {len(temp)}")
     sleep(3)
     meta = []
+    exist = 0
+    queue = 0
+    print(f"Checking {os.path.join(save_dir, 'audio')}")
+    print(f"Checking {os.path.join(padded_dir, 'audio')}")
     for item in temp:
         if os.path.exists(os.path.join(save_dir, "audio", f"AudioSet.{item[0]}.wav")):
-            print(f"Skipping: \t{item} | audio", end="\r")
-        elif os.path.exists(os.path.join(padded_dir, f"{item[0]}.wav")):
-            print(f"Skipping: \t{item} | padded", end="\n")
+            print(f"Skipping: \t{item[0]:11s} in audio ", end="\r")
+            exist += 1
+        elif os.path.exists(os.path.join(padded_dir, "audio", f"AudioSet.{item[0]}.wav")):
+            print(f"Skipping: \t{item[0]:11s} in padded", end="\r")
+            exist += 1
         else:
             meta.append(item)
-    logging.info(f"Downloading meta length: {len(meta)}")
+            queue += 1
+    print(f"Downloading meta length: {len(meta)} / Queue length: {queue} / Exist length: {exist}")
+    sleep(3)
     random.shuffle(meta)
     sleep(1)
 
